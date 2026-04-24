@@ -1,0 +1,30 @@
+{
+  "name": "umurava-hire-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "mongoose": "^8.0.0",
+    "next": "14.2.0",
+    "next-auth": "^4.24.13",
+    "papaparse": "^5.4.1",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/papaparse": "^5.3.14",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/react": "19.2.14",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.0",
+    "typescript": "^5.3.3"
+  }
+}
