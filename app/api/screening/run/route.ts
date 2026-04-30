@@ -69,11 +69,18 @@ export async function POST(req: NextRequest) {
     if (jobId) {
       await Job.findByIdAndUpdate(jobId, { status: 'active' }).catch(() => {});
     }
-    const msg    = err.message || 'Screening failed';
-    const status = msg.toLowerCase().includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('too many') ? 429 : 500;
-    const userMsg = status === 429
-      ? 'Gemini API quota exceeded. Please wait a few minutes and try again, or check your API usage at ai.google.dev.'
+    const msg = err.message || 'Screening failed';
+    const lower = msg.toLowerCase();
+    const isQuota =
+      lower.includes('429') ||
+      lower.includes('quota') ||
+      lower.includes('too many') ||
+      lower.includes('resource_exhausted') ||
+      lower.includes('resource has been exhausted') ||
+      err?.status === 429;
+    const userMsg = isQuota
+      ? `Gemini API quota exceeded. Please wait a few minutes and try again, or check your API usage at ai.google.dev. (Raw: ${msg})`
       : msg;
-    return NextResponse.json({ message: userMsg }, { status });
+    return NextResponse.json({ message: userMsg }, { status: isQuota ? 429 : 500 });
   }
 }

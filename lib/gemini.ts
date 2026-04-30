@@ -1,7 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Job, TalentProfile, ScreeningResult } from '@/types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Lazy getter — reads env var fresh on every call, never caches a stale key
+function getGenAI() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY environment variable is not set');
+  return new GoogleGenerativeAI(key);
+}
 
 const CHUNK_SIZE = 20; // safe for Gemini free-tier rate limits
 
@@ -234,9 +239,21 @@ function parseResponse(raw: string): GeminiScreeningItem[] {
   }));
 }
 
+function isQuotaError(err: any): boolean {
+  const msg = String(err?.message ?? '').toLowerCase();
+  return (
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('too many') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('resource has been exhausted') ||
+    err?.status === 429
+  );
+}
+
 /* ─── Single chunk screener with retry ───────────────────────────── */
 async function screenChunk(
-  model: ReturnType<typeof genAI.getGenerativeModel>,
+  model: ReturnType<ReturnType<typeof getGenAI>['getGenerativeModel']>,
   job: Job,
   chunk: TalentProfile[],
   attempt = 1
@@ -246,7 +263,8 @@ async function screenChunk(
     const result = await model.generateContent(prompt);
     return parseResponse(result.response.text());
   } catch (err) {
-    if (attempt < 3) {
+    // Never retry quota/rate-limit errors — it only burns more quota
+    if (!isQuotaError(err) && attempt < 3) {
       await new Promise((r) => setTimeout(r, 2000 * attempt)); // backoff: 2s, 4s
       return screenChunk(model, job, chunk, attempt + 1);
     }
@@ -413,7 +431,7 @@ Extraction rules:
 - Return ONLY the JSON object`;
 
 export async function parseResume(resumeText: string): Promise<ParsedResume> {
-  const model = genAI.getGenerativeModel({
+  const model = getGenAI().getGenerativeModel({
     model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.05, maxOutputTokens: 4096 },
   });
@@ -504,7 +522,7 @@ Parsing rules:
 - Return ONLY the JSON array`;
 
 export async function parseCSVWithGemini(csvText: string): Promise<any[]> {
-  const model = genAI.getGenerativeModel({
+  const model = getGenAI().getGenerativeModel({
     model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.05, maxOutputTokens: 8192 },
   });
@@ -638,7 +656,7 @@ export async function screenApplicants(
   job: Job,
   applicants: TalentProfile[]
 ): Promise<Omit<ScreeningResult, '_id' | 'createdAt'>[]> {
-  const model = genAI.getGenerativeModel({
+  const model = getGenAI().getGenerativeModel({
     model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
   });
