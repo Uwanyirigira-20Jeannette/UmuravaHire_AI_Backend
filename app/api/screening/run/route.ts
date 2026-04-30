@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/mongodb';
 import Job from '@/models/Job';
 import TalentProfile from '@/models/TalentProfile';
 import ScreeningResult from '@/models/ScreeningResult';
-import { screenApplicants, ruleBasedScreening } from '@/lib/gemini';
+import { screenApplicants } from '@/lib/gemini';
 import type { Job as JobType, TalentProfile as TalentType } from '@/types';
 
 // POST /api/screening/run
@@ -32,21 +32,7 @@ export async function POST(req: NextRequest) {
       jobId: a.jobId.toString(),
     })) as unknown as TalentType[];
 
-    // Try Gemini first; fall back to rule-based scoring on quota errors
-    let screeningData: Omit<import('@/types').ScreeningResult, '_id' | 'createdAt'>[];
-    let scoringMode = 'ai';
-
-    try {
-      screeningData = await screenApplicants(jobArg, talsArg);
-    } catch (geminiErr: any) {
-      const msg = (geminiErr.message || '').toLowerCase();
-      if (msg.includes('429') || msg.includes('quota') || msg.includes('too many') || msg.includes('rate')) {
-        scoringMode = 'rule-based';
-        screeningData = ruleBasedScreening(jobArg, talsArg);
-      } else {
-        throw geminiErr;
-      }
-    }
+    const screeningData = await screenApplicants(jobArg, talsArg);
 
     // Cap at shortlistTarget
     const shortlisted = screeningData.slice(0, job.shortlistTarget);
@@ -77,7 +63,7 @@ export async function POST(req: NextRequest) {
       jobId,
       total:      applicants.length,
       shortlisted: shaped.length,
-      scoringMode,
+      scoringMode: 'ai',
     });
   } catch (err: any) {
     if (jobId) {
