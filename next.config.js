@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['mongoose', 'pdf-parse', 'bcryptjs'],
+  experimental: {
+    serverComponentsExternalPackages: ['mongoose', 'pdf-parse', 'bcryptjs'],
+  },
 
   async headers() {
     const frontendUrl = process.env.FRONTEND_URL || '*';
