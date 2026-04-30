@@ -6,17 +6,21 @@ export interface IUser extends Document {
   passwordHash?: string;
   avatar?: string;
   provider: 'credentials' | 'google';
+  resetToken?: string;
+  resetTokenExpiry?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
   {
-    name:         { type: String, required: true, trim: true },
-    email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String },           // undefined for Google-only accounts
-    avatar:       { type: String },
-    provider:     { type: String, enum: ['credentials', 'google'], default: 'credentials' },
+    name:               { type: String, required: true, trim: true },
+    email:              { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash:       { type: String },           // undefined for Google-only accounts
+    avatar:             { type: String },
+    provider:           { type: String, enum: ['credentials', 'google'], default: 'credentials' },
+    resetToken:         { type: String },
+    resetTokenExpiry:   { type: Date },
   },
   { timestamps: true }
 );
