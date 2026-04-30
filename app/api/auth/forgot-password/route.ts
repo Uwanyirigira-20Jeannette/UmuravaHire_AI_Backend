@@ -4,8 +4,6 @@ import User from '@/models/User';
 import { connectDB } from '@/lib/mongodb';
 import crypto from 'crypto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -15,6 +13,9 @@ export async function POST(request: NextRequest) {
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
+
+    // Initialize Resend only when the function is called
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
     // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
