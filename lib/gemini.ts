@@ -385,10 +385,10 @@ Use this exact schema (include every field present in the resume):
 }
 
 Extraction rules:
-- name: The candidate's full name is ALWAYS present in a resume. It is typically the FIRST prominent text at the very top — often the largest or boldest text, appearing as a standalone heading before any contact details. It is usually in "First Last" or "First Middle Last" format. Extract it even if there is NO "Name:" label. Do NOT confuse it with a company name, job title, or university name.
+- name: The candidate's full name is the VERY FIRST piece of text at the top of the resume — it is the bold heading that appears before any contact details, job title, or summary. It is typically 2–3 words (First Last or First Middle Last), contains only letters/hyphens/spaces, and has NO digits or @ symbols. Extract it exactly as written. Do NOT confuse it with a company name, job title, university name, or section heading.
 - email: email address from contact section
 - phone: phone number from contact section (include country code if present)
-- location: Look for fields labeled "Address", "Location", "City", "Country", or any line that looks like a postal/street address. Extract the city and country (e.g. "Kigali, Rwanda"). If only a street address is found, derive the city and country from it. If a line contains "Address:" followed by text, parse that text for the city and country.
+- location: Look ONLY in the contact/header section (first ~15 lines) for fields labeled "Address", "Location", "City", "Country", or any line that looks like a postal/street address. Extract the city and country (e.g. "Kigali, Rwanda"). If only a street address is found, derive the city and country from it. If NO address or location is found anywhere in the resume, omit this field entirely — do NOT guess or invent a location.
 - currentRole: most recent job title
 - experienceYears: total years of professional work experience (integer)
 - skills: EVERY technology, framework, language, library, and tool mentioned

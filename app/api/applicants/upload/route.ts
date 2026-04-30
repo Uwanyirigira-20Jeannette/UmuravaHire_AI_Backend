@@ -153,7 +153,7 @@ function manualRowToTalent(row: Record<string, string>, jobId: string, jobTitle:
     headline:        row.headline || row.currentRole || row.role || jobTitle,
     email:           row.email    || '',
     phone:           row.phone    || undefined,
-    location:        row.location || row.city || 'Not specified',
+    location:        row.location || row.city || '—',
     skills:          sanitizeSkills(row.skills ? parseSkillsString(row.skills) : []),
     education:       sanitizeEducation(row.degree ? [{ degree: row.degree, fieldOfStudy: row.fieldOfStudy || '', institution: row.institution || '' }] : []),
     experience:      [],
@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
           headline:        r.headline  || r.currentRole || r.currentTitle || jobTitle,
           email:           r.email     || '',
           phone:           r.phone     || undefined,
-          location:        r.location  || 'Not specified',
+          location:        r.location  || '—',
           skills:          sanitizeSkills(r.skills ?? []),
           experienceYears: Number(r.yearsOfExperience || r.experienceYears || 0),
           currentRole:     r.currentRole || r.currentTitle || jobTitle,
@@ -350,12 +350,11 @@ export async function POST(req: NextRequest) {
         firstName = parts[0] || 'Candidate';
         lastName  = parts.slice(1).join(' ');
       } else {
-        // Walk the first lines of the CV looking for a name-shaped string:
-        // 2–5 words, only letters/hyphens/apostrophes, no digits or @ signs,
-        // length between 3 and 55 chars — this is where names appear on CVs.
+        // Walk the first 20 lines of the CV — name is always near the very top.
         const candidate = pdfText
           .split(/\r?\n/)
           .map((l) => l.trim())
+          .slice(0, 20)
           .find(
             (l) =>
               l.length >= 3 &&
@@ -376,8 +375,8 @@ export async function POST(req: NextRequest) {
       /* Email: Gemini first, then regex scan the raw text */
       const email = gemini?.email?.trim() || extractEmailFallback(pdfText) || '';
 
-      /* Location: Gemini first, then regex scan Address/Location lines */
-      const location = gemini?.location?.trim() || extractLocationFallback(pdfText) || 'Not specified';
+      /* Location: Gemini first, then regex scan Address/Location lines, dash if not found */
+      const location = gemini?.location?.trim() || extractLocationFallback(pdfText) || '—';
 
       profiles = [{
         jobId,
