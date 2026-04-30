@@ -1,8 +1,17 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { NextRequest, NextResponse } from 'next/server';
 import User from '@/models/User';
 import { connectDB } from '@/lib/mongodb';
 import crypto from 'crypto';
+
+// Create reusable transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +22,6 @@ export async function POST(request: NextRequest) {
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
-
-    // Initialize Resend only when the function is called
-    const resend = new Resend(process.env.RESEND_API_KEY);
 
     // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
@@ -39,8 +45,8 @@ export async function POST(request: NextRequest) {
     // Send email
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
 
-    await resend.emails.send({
-      from: 'UmuravaHire <onboarding@resend.dev>',
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: email,
       subject: 'Reset your UmuravaHire password',
       html: `
