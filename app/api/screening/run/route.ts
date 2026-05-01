@@ -25,14 +25,15 @@ export async function POST(req: NextRequest) {
     // Update job status to screening
     await Job.findByIdAndUpdate(jobId, { status: 'screening' });
 
-    const jobArg   = { ...job, _id: job._id.toString() } as unknown as JobType;
-    const talsArg  = applicants.map((a) => ({
+    const jobArg  = { ...job, _id: job._id.toString() } as unknown as JobType;
+    const talsArg = applicants.map((a) => ({
       ...a,
       _id:   a._id.toString(),
       jobId: a.jobId.toString(),
     })) as unknown as TalentType[];
 
-    const screeningData = await screenApplicants(jobArg, talsArg);
+    // screenApplicants never throws — falls back to rule-based on any Gemini failure
+    const { results: screeningData, scoringMode } = await screenApplicants(jobArg, talsArg);
 
     // Cap at shortlistTarget
     const shortlisted = screeningData.slice(0, job.shortlistTarget);
@@ -59,28 +60,18 @@ export async function POST(req: NextRequest) {
     }));
 
     return NextResponse.json({
-      results:    shaped,
+      results:     shaped,
       jobId,
-      total:      applicants.length,
+      total:       applicants.length,
       shortlisted: shaped.length,
-      scoringMode: 'ai',
+      scoringMode,
     });
   } catch (err: any) {
+    // Only DB / infrastructure errors reach here (screenApplicants handles its own errors)
     if (jobId) {
       await Job.findByIdAndUpdate(jobId, { status: 'active' }).catch(() => {});
     }
-    const msg = err.message || 'Screening failed';
-    const lower = msg.toLowerCase();
-    const isQuota =
-      lower.includes('429') ||
-      lower.includes('quota') ||
-      lower.includes('too many') ||
-      lower.includes('resource_exhausted') ||
-      lower.includes('resource has been exhausted') ||
-      err?.status === 429;
-    const userMsg = isQuota
-      ? `Gemini API quota exceeded. Please wait a few minutes and try again, or check your API usage at ai.google.dev. (Raw: ${msg})`
-      : msg;
-    return NextResponse.json({ message: userMsg }, { status: isQuota ? 429 : 500 });
+    console.error('[UmuravaHire] Screening route error:', err?.message ?? err);
+    return NextResponse.json({ message: err.message || 'Screening failed' }, { status: 500 });
   }
 }

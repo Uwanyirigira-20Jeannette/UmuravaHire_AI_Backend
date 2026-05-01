@@ -651,70 +651,95 @@ export function ruleBasedScreening(
     }));
 }
 
+/* ─── Output type ─────────────────────────────────────────────────── */
+export interface ScreeningOutput {
+  results:     Omit<ScreeningResult, '_id' | 'createdAt'>[];
+  scoringMode: 'ai' | 'rule-based';
+}
+
 /* ─── Main export ─────────────────────────────────────────────────── */
 export async function screenApplicants(
   job: Job,
   applicants: TalentProfile[]
-): Promise<Omit<ScreeningResult, '_id' | 'createdAt'>[]> {
-  const model = getGenAI().getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
-  });
+): Promise<ScreeningOutput> {
 
-  // Split into chunks for large batches
-  const chunks: TalentProfile[][] = [];
-  for (let i = 0; i < applicants.length; i += CHUNK_SIZE) {
-    chunks.push(applicants.slice(i, i + CHUNK_SIZE));
-  }
+  // ── Attempt Gemini AI screening ──────────────────────────────────────
+  try {
+    const model = getGenAI().getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      generationConfig: { temperature: 0.15, maxOutputTokens: 8192 },
+    });
 
-  // Process chunks sequentially (avoids rate-limit collisions)
-  const allItems: (Omit<ScreeningResult, '_id' | 'createdAt'> & { _composite: number })[] = [];
-
-  for (let ci = 0; ci < chunks.length; ci++) {
-    const chunk      = chunks[ci];
-    const chunkStart = ci * CHUNK_SIZE;
-    const items      = await screenChunk(model, job, chunk);
-
-    for (const item of items) {
-      const globalIdx = chunkStart + item.candidateIndex;
-      const talent    = applicants[globalIdx];
-      if (!talent) continue;
-
-      const composite =
-        item.skillsScore     * 0.35 +
-        item.experienceScore * 0.30 +
-        item.educationScore  * 0.20 +
-        item.relevanceScore  * 0.15;
-
-      // Override hiringSuggestion to be consistent with composite
-      let hiringSuggestion: GeminiScreeningItem['hiringSuggestion'];
-      if (composite >= 85)      hiringSuggestion = 'Strong Yes';
-      else if (composite >= 70) hiringSuggestion = 'Yes';
-      else if (composite >= 50) hiringSuggestion = 'Maybe';
-      else                      hiringSuggestion = 'No';
-
-      allItems.push({
-        jobId:    job._id,
-        talentId: talent._id,
-        rank:     0,
-        matchScore: Math.round(composite),
-        scoreBreakdown: {
-          skills:     Math.round(item.skillsScore),
-          experience: Math.round(item.experienceScore),
-          education:  Math.round(item.educationScore),
-          relevance:  Math.round(item.relevanceScore),
-        },
-        strengths:        item.strengths,
-        gaps:             item.gaps,
-        recommendation:   item.recommendation,
-        hiringSuggestion,
-        _composite:       composite,
-      });
+    // Split into chunks for large batches
+    const chunks: TalentProfile[][] = [];
+    for (let i = 0; i < applicants.length; i += CHUNK_SIZE) {
+      chunks.push(applicants.slice(i, i + CHUNK_SIZE));
     }
-  }
 
-  // Sort descending by composite, assign global ranks
-  return allItems
-    .sort((a, b) => b._composite - a._composite)
-    .map(({ _composite: _, ...rest }, i) => ({ ...rest, rank: i + 1 }));
+    // Process chunks sequentially (avoids rate-limit collisions)
+    const allItems: (Omit<ScreeningResult, '_id' | 'createdAt'> & { _composite: number })[] = [];
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk      = chunks[ci];
+      const chunkStart = ci * CHUNK_SIZE;
+      const items      = await screenChunk(model, job, chunk);
+
+      for (const item of items) {
+        const globalIdx = chunkStart + item.candidateIndex;
+        const talent    = applicants[globalIdx];
+        if (!talent) continue;
+
+        const composite =
+          item.skillsScore     * 0.35 +
+          item.experienceScore * 0.30 +
+          item.educationScore  * 0.20 +
+          item.relevanceScore  * 0.15;
+
+        let hiringSuggestion: GeminiScreeningItem['hiringSuggestion'];
+        if (composite >= 85)      hiringSuggestion = 'Strong Yes';
+        else if (composite >= 70) hiringSuggestion = 'Yes';
+        else if (composite >= 50) hiringSuggestion = 'Maybe';
+        else                      hiringSuggestion = 'No';
+
+        allItems.push({
+          jobId:    job._id,
+          talentId: talent._id,
+          rank:     0,
+          matchScore: Math.round(composite),
+          scoreBreakdown: {
+            skills:     Math.round(item.skillsScore),
+            experience: Math.round(item.experienceScore),
+            education:  Math.round(item.educationScore),
+            relevance:  Math.round(item.relevanceScore),
+          },
+          strengths:        item.strengths,
+          gaps:             item.gaps,
+          recommendation:   item.recommendation,
+          hiringSuggestion,
+          _composite:       composite,
+        });
+      }
+    }
+
+    const results = allItems
+      .sort((a, b) => b._composite - a._composite)
+      .map(({ _composite: _, ...rest }, i) => ({ ...rest, rank: i + 1 }));
+
+    console.log(
+      `[UmuravaHire] AI screening complete — ${results.length} candidates ranked for "${job.title}"`
+    );
+    return { results, scoringMode: 'ai' };
+
+  } catch (err: any) {
+    // ── Fallback: rule-based scoring (always succeeds) ────────────────
+    console.error(
+      `[UmuravaHire] Gemini screening failed for "${job.title}" — switching to rule-based fallback.\n` +
+      `  Reason: ${err?.message ?? String(err)}`
+    );
+    const results = ruleBasedScreening(job, applicants);
+    console.log(
+      `[UmuravaHire] Rule-based fallback complete — ${results.length} candidates scored for "${job.title}"`
+    );
+    return { results, scoringMode: 'rule-based' };
+  }
 }
